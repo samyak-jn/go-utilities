@@ -4,8 +4,15 @@ import (
 	utils "go-utilities/utils"
 )
 
-func main() {
+var (
+	kubeconfig = "/home/samjain/.kube/config"
+	master     = ""
+	namespace  = "argocd"
+	podName    = "argocd-server-86dcc9f88f-b64d6"
+)
 
-	utils.Kubectl_apply()
+func main() {
+	utils.Get_pod_info(kubeconfig, master, namespace, podName)
+	// utils.Kubectl_apply()var jsonMap map[string]interface{}
 
 }
