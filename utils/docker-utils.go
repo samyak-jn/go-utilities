@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -75,7 +76,6 @@ func Docker_apply() {
 			"-c", "log_statement=all",
 			"-c", "log_min_duration_statement=0").Output()
 
-		fmt.Println("Docker Container ID: " + string(dockerContainerID))
 		if errDockerRun != nil {
 			log.Fatal(errDockerRun)
 		}
@@ -84,13 +84,12 @@ func Docker_apply() {
 		}
 		// check for container status
 		status, _ := exec.Command("docker", "container", "inspect", "-f", "{{.State.Status}}", string(dockerContainerID)).Output()
-		fmt.Println(string(status))
 		if string(status) == "running" {
 			return true, nil
 		}
-		fmt.Println(string(status))
 
-		fmt.Println(string(dockerContainerID), "`docker run` command Run Successful!")
+		fmt.Println("Docker Container ID: " + string(dockerContainerID))
+		fmt.Println("`docker run` command Run Successful!")
 
 		return true, nil
 	})
@@ -98,37 +97,63 @@ func Docker_apply() {
 		log.Fatal("error in executing docker run command")
 	}
 
-	dbCreatecmd := "PGPASSWORD=gitops psql -h localhost -d %s -U postgres -p 6432 -c select 1"
-	s = fmt.Sprintf(dbCreatecmd, tempDBName)
+	dbcmd := "PGPASSWORD=gitops psql -h localhost -d %s -U postgres -p 6432 -c 'select 1'"
+	s = fmt.Sprintf(dbcmd, tempDBName)
 
 	fmt.Println("\nRunning: ", s)
 	// To get the output of the command
 	err = wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
-		psqlcmd := exec.Command("psql", "-h", "localhost", "-d", tempDBName, "-U", "postgres", "-p", "6432")
+		psqlcmd := exec.Command("psql", "-h", "localhost", "-d", tempDBName, "-U", "postgres", "-p", "6432", "-c", "select 1")
 		psqlcmd.Env = os.Environ()
 		psqlcmd.Env = append(psqlcmd.Env, "PGPASSWORD=gitops")
+		var outb, errb bytes.Buffer
+		psqlcmd.Stdout = &outb
+		psqlcmd.Stderr = &errb
 
 		psqlErr := psqlcmd.Run()
 
-		fmt.Println(psqlcmd.Env, "\n", psqlErr)
-		if psqlErr != fmt.Errorf("0") {
+		fmt.Println("out:", outb.String(), "err:", errb.String())
+		if psqlErr != nil {
 			return false, psqlErr
 		}
+		fmt.Println("database is ready to use")
 		return true, nil
 	})
 
-	// dbActivatecmd := "PGPASSWORD=gitops psql -h localhost -d %s -U postgres -p 6432 -c select 1"
-	// s = fmt.Sprintf(dbActivatecmd, tempDBName)
+	// creating a new database
+	newDBName := "postgres"
+	dbcmd = "PGPASSWORD=gitops psql -h localhost -d %s -U postgres -p 6432"
+	s = fmt.Sprintf(dbcmd, newDBName)
+	fmt.Println("\nRunning: ", s)
 
-	// fmt.Println("\nRunning: ", s)
-	// // To get the output of the command
-	// out, err = exec.Command("PGPASSWORD=gitops", "psql", "-h", "localhost", "-d", "%s", "-U", "postgres", "-p", "6432", "-c", "select", "1").Output()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	psqlcmd := exec.Command("psql", "-h", "localhost", "-d", newDBName, "-U", "postgres", "-p", "6432")
+	psqlcmd.Env = os.Environ()
+	psqlcmd.Env = append(psqlcmd.Env, "PGPASSWORD=gitops")
+	var errb bytes.Buffer
+	psqlcmd.Stderr = &errb
 
-	// To print which command is running
+	psqlErr := psqlcmd.Run()
 
-	// defer cleanup("dockerContainerID", "gitops-net-"+uuid)
+	fmt.Println("err:", errb.String())
+	if psqlErr != nil {
+		log.Fatal(psqlErr)
+	}
+
+	fmt.Println(newDBName, "database is created and ready to use")
+
+	// Following command is used to populate the database tables from the db-schema.sql (defined in the monorepo)
+	dbcmd = "PGPASSWORD=gitops psql -h localhost -d %s -U postgres -p 6432 -q -f db-schema.sql"
+	s = fmt.Sprintf(dbcmd, newDBName)
+	fmt.Println("\nRunning: ", s)
+	psqlcmd = exec.Command("psql", "-h", "localhost", "-d", newDBName, "-U", "postgres", "-p", "6432", "-q", "-f", "db-schema.sql")
+	psqlcmd.Env = os.Environ()
+	psqlcmd.Env = append(psqlcmd.Env, "PGPASSWORD=gitops")
+	psqlErr = psqlcmd.Run()
+
+	fmt.Println("err:", errb.String())
+	if psqlErr != nil {
+		log.Fatal(psqlErr)
+	}
+	fmt.Println("schema executed in the postgres")
 
 }
