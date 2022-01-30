@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	utils "go-utilities/utils"
+	"log"
 )
 
 var (
@@ -13,7 +13,15 @@ var (
 )
 
 func main() {
-	utils.Get_pod_info(kubeconfig, master, namespace, podName)
-	// utils.Kubectl_apply()var jsonMap map[string]interface{}
-	fmt.Print(utils.PodRestartcount("argocd"))
+
+	containerId, networkName, err := utils.NewEphemeralCreateTestFramework()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// fmt.Println([]string{containerId, networkName})
+	errClean := utils.NewEphemeralCleanTestFramework(containerId, networkName)
+	if errClean != nil {
+		log.Fatal(errClean)
+	}
+
 }
